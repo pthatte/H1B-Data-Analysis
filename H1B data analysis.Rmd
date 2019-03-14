@@ -1,0 +1,266 @@
+---
+title: "H1B Analysis"
+author: "Pratik Thatte"
+date: "March 4, 2019"
+output: html_document
+---
+
+
+```{r}
+library(readr)
+h1b_kaggle <- read_csv("C:/Users/PRATIK/Desktop/Database Programming/h1b_kaggle.csv")
+View(h1b_kaggle)
+```
+
+
+```{r}
+## getting the dimensions and summary of the dataset
+dim(h1b_kaggle)
+summary(h1b_kaggle)
+```
+
+## Descriptive Statistics
+```{r}
+## removing two columns and extracting state from worksite
+h1b_kaggle$lon <- NULL
+h1b_kaggle$lat <- NULL
+h1b_kaggle$STATE <-trimws(gsub("^.*,", "", h1b_kaggle$WORKSITE))
+
+```
+
+
+```{r}
+## grouping the dataset with case status and wages
+library(dplyr)
+h1b <- h1b_kaggle %>%
+  filter(!is.na(CASE_STATUS)) %>%
+  filter(!is.na(PREVAILING_WAGE)) %>%
+select(CASE_STATUS, PREVAILING_WAGE) %>%
+group_by(CASE_STATUS) %>%
+summarise(PREVAILING_WAGE = mean(PREVAILING_WAGE))
+
+
+```
+
+```{r}
+## grouping the states with average wages
+library(dplyr)
+h2b <- h1b_kaggle %>%
+  filter(!is.na(STATE)) %>%
+  filter(!is.na(PREVAILING_WAGE)) %>%
+select(PREVAILING_WAGE, STATE) %>%
+group_by(STATE) %>%
+summarise(status = mean(PREVAILING_WAGE))
+```
+
+```{r}
+##using ifelse to change the names in the variable full time position
+h1b_kaggle$FULL_TIME_POSITION<- ifelse(h1b_kaggle$FULL_TIME_POSITION== "N", "NO","YES")
+```
+
+```{r}
+## case status is certified with full time position
+library(dplyr)
+h3b <- select(h1b_kaggle, CASE_STATUS, FULL_TIME_POSITION , PREVAILING_WAGE)
+h3b<- filter(h3b, FULL_TIME_POSITION== "YES")
+h3b<- filter(h3b,CASE_STATUS %in% c("CERTIFIED"))
+h3b <- arrange(h3b, PREVAILING_WAGE)
+
+## case status certified with part time position
+h4b <- select(h1b_kaggle, CASE_STATUS, FULL_TIME_POSITION , PREVAILING_WAGE)
+h4b<- filter(h4b, FULL_TIME_POSITION== "NO")
+h4b<- filter(h4b,CASE_STATUS %in% c("CERTIFIED"))
+h4b<- arrange(h4b, PREVAILING_WAGE)
+
+##average salary of those who are having full time position and case status is certified
+mean(h3b$PREVAILING_WAGE)
+
+##average salary of those who are having part time position and case status is certified
+mean(h4b$PREVAILING_WAGE)
+
+## the above code says that 74% people are more likely to get H1B if their position is Full time and only 12.5% of people are likely to be eligible for H1B if they are having part time positions. 
+
+## Also the average salary for certified case status and full time jobs is $74941.18, while average salary with certified status but part time job is $57972.27. 
+
+
+```
+
+```{r}
+## converting all the job positions in lowercase to avoid duplicates
+h1b_kaggle$SOC_NAME <- tolower(h1b_kaggle$SOC_NAME)
+```
+
+
+```{r}
+## we will now do the analysis according to the soc_name who are having full time positions and case status is certified
+library(dplyr)
+soc_1 <- select(h1b_kaggle, CASE_STATUS, SOC_NAME, FULL_TIME_POSITION, PREVAILING_WAGE)
+soc_1 <- filter(soc_1, CASE_STATUS == "CERTIFIED" & FULL_TIME_POSITION == "YES")
+
+## grouping and summarizing the data
+by_soc_name <- group_by(soc_1, SOC_NAME)
+by_soc_name <- summarize(by_soc_name, avg_wages = mean(PREVAILING_WAGE, na.rm = TRUE))
+by_soc_name <- arrange(by_soc_name, desc(avg_wages))
+
+## analysis using soc_name by part time position and case staus is certified
+soc_2 <- select(h1b_kaggle, CASE_STATUS, SOC_NAME, FULL_TIME_POSITION, PREVAILING_WAGE)
+soc_2<- filter(soc_2, CASE_STATUS == "CERTIFIED" & FULL_TIME_POSITION == "NO")
+
+## grouping and summarizing the data
+by_soc_name2 <- group_by(soc_2, SOC_NAME)
+by_soc_name2 <- summarize(by_soc_name2, avg_wages = mean(PREVAILING_WAGE, na.rm = TRUE))
+by_soc_name2 <- arrange(by_soc_name2, desc(avg_wages))
+                          
+```
+
+```{r}
+## now we will answer the question that which state has the most number of certified cases?
+state <- select(h1b_kaggle, CASE_STATUS, STATE)
+state <- filter(state, CASE_STATUS== "CERTIFIED")
+state_group <- group_by(state, STATE)
+state_group <- summarize(state_group, number = length(CASE_STATUS))
+state_group <- arrange(state_group, desc(number))
+
+max(state_group$number)
+min(state_group$number)
+tail(state_group$STATE)
+
+## with the above analysis, we come to know that california has highest visa accepting rate whereas the wyoming state has the lowest acceptance rate. 
+
+## now we will answer the question that which state has the full time positions?
+position <- select(h1b_kaggle, FULL_TIME_POSITION, STATE)
+position <- filter(position, FULL_TIME_POSITION == "YES")
+position_yes <- group_by(position, STATE)
+position_yes <- summarize(position_yes, total_positions = length(FULL_TIME_POSITION))
+position_yes <- arrange(position_yes, desc(total_positions))
+
+## with the above analysis we can say that california has tha maximum full time jobs while wyoming has the lowest full time positions available.
+
+
+```
+
+```{r}
+library(dplyr)
+abc <- select(h1b_kaggle, YEAR, CASE_STATUS)
+abc<- filter(abc, CASE_STATUS == "CERTIFIED")
+abc_certified <- group_by(abc, YEAR)
+abc_certified <- summarize(abc_certified, total_positions = length(CASE_STATUS))
+abc_certified <- arrange(abc_certified, desc(YEAR))
+
+## with the above analysis, we can say that certified cases are increasing over the years.
+
+
+```
+
+## DATA VISUALIZATIONS
+
+```{r}
+## graph showing certifies cases per year
+library(ggplot2)
+ggplot(data = abc_certified, aes(x = YEAR, y = total_positions/1000, colour = total_positions)) +  
+  geom_line()+ geom_point() + theme_bw() + theme(legend.position="right") +
+  labs(x="Year", y="Applications (thousands)", colour="total positions", 
+       title=" Certified Case status (per year)")
+## With this graph, we can say that the certified positions keep on increasing by year. Also from 2013-2015 we can see the highest growth in the certified positions. 
+```
+
+```{r}
+## graph showing state vs full time positions
+library(ggplot2)
+ggplot(data = position_yes, aes(x = reorder(STATE,total_positions), y = total_positions/1000, colour = total_positions)) +  
+  geom_area()+geom_point() + theme_bw() + theme(legend.position="right") + coord_flip() +
+  labs(x="STATE", y="Full Time Positions (thousands)", colour="total positions", 
+       title="Full Time Positions by state")
+```
+
+```{r}
+## graph showing certified cases by states
+library(ggplot2)
+ggplot(data = state_group, aes(x =reorder(STATE,number), y = number/1000, colour = number)) +  
+  geom_area()+ geom_point() + theme_bw() + theme(legend.position="right") + coord_flip() +
+  labs(x="STATE", y="no.of certified cases", colour="number", 
+       title="certified cases by state")
+```
+
+```{r}
+## graph showing average salary by states
+library(ggplot2)
+ggplot(data = h2b, aes(x = reorder(STATE, status), y = status/1000, colour = status)) +  
+   geom_bar(stat="identity", fill="gold", colour="black") + theme_bw() + theme(legend.position="right") + coord_flip() +
+  labs(x="STATE", y="Avg_wages", colour="status", 
+       title="Avg_Wages by state")
+```
+
+```{r}
+## making wordcloud for states
+library(tm)
+library(wordcloud)
+```
+```{r}
+visa_petitions <- h1b_kaggle
+corpus <- Corpus(VectorSource(visa_petitions$STATE))
+corpus[[1]][1]
+
+## create TDM
+tdm <- TermDocumentMatrix(corpus)
+m <- as.matrix(tdm)
+v <- sort(rowSums(m), decreasing = TRUE)
+d <- data.frame(word = names(v), freq = v)
+
+wordcloud(d$word, d$freq, random.order = FALSE, rot.per = 0.3, scale = c(4,.5), max.words =101, colors = brewer.pal(8, "Dark2"))
+title(main = "word cloud - Unigram", font.main = 1, cex.main =1.5)
+
+
+
+```
+
+```{r}
+## selecting employer and prevailing wages
+h1b_kaggle$EMPLOYER_NAME <- tolower(h1b_kaggle$EMPLOYER_NAME)
+library(dplyr)
+emp<- select(h1b_kaggle, EMPLOYER_NAME, PREVAILING_WAGE)
+emp<- group_by(emp, EMPLOYER_NAME)
+emp<- summarize(emp, avg_wage= mean(PREVAILING_WAGE, na.rm = TRUE))
+emp <- arrange(emp, desc(avg_wage))
+```
+
+
+```{r}
+## selecting top ten employers
+   library(dplyr)
+    top_ten <- emp %>%
+         filter(rank(desc(avg_wage))<=10)
+```
+
+
+
+```{r}
+## ploting top ten employers against average salary
+library(ggplot2)
+ggplot(data = top_ten, aes(x = reorder(EMPLOYER_NAME,avg_wage), y = avg_wage/1000)) +  
+  geom_bar(stat="identity", fill="tomato", colour="black") + coord_flip() +
+  theme_bw(base_size = 10)  +
+  labs(title="Top Ten Employers with average salary", x ="Employer", y = "Average Salary (thousands)")
+```
+
+```{r}
+## we will select data scientist and data analyst jobs
+library(dplyr)
+data_jobs <- select(h1b_kaggle, JOB_TITLE, YEAR, PREVAILING_WAGE, CASE_STATUS)
+data_jobs <- filter(data_jobs, CASE_STATUS == "CERTIFIED")
+data_jobs <- filter(data_jobs,JOB_TITLE %in% c("DATA SCIENTIST", "DATA ANALYTICS ENGINEER"))
+data_jobs <- group_by(data_jobs, YEAR, JOB_TITLE)
+data_jobs <- summarize(data_jobs, avg_wage= mean(PREVAILING_WAGE))
+```
+
+```{r}
+## plotting graph of data analyst and data scientists w.r.t their salaries
+library(ggplot2)
+ggplot(data =data_jobs, aes(x =YEAR, y = avg_wage/1000, colour = JOB_TITLE)) +  
+  geom_line()+ geom_point() + theme_bw() + theme(legend.position="right") + 
+  labs(x="YEAR", y="AVERAGE SALARY", colour="Job title", 
+       title="DATA SCIENTIST VS DATA ANALYST SALARY VARIATION")
+
+## with the above code, we can see a normalelevation in terms of salaries for data scientists job while data analytics engineer job is very scattered. Sometimes it goes high(year 2013) while it reaches low (year 2015)
+```
+
